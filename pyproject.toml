@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xarray-upstream-checker"
+version = "0.1.0"
+description = "Monitor xarray's upstream dependency CI tests for zarr compatibility"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Ian Hunt-Isaak"},
+]
+keywords = ["xarray", "zarr", "ci", "monitoring", "upstream"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering",
+]
+
+dependencies = [
+    "rich>=10.0.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/ianhi/xarray-upstream-checker"
+"Bug Reports" = "https://github.com/ianhi/xarray-upstream-checker/issues"
+"Source" = "https://github.com/ianhi/xarray-upstream-checker"
+
+[project.scripts]
+xarray-upstream-checker = "xarray_upstream_checker:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.hatch.build.targets.wheel.sources]
+"xarray_upstream_checker.py" = "xarray_upstream_checker.py"
