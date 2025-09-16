@@ -9,12 +9,24 @@ This is a Python CLI tool (`xarray-upstream-checker`) that monitors xarray's ups
 ## Critical Implementation Details
 
 ### GitHub API Integration
-- Uses `gh` CLI exclusively (not GitHub API directly)
-- **Key Command**: `gh api repos/pydata/xarray/actions/jobs/{job_id}/logs` to get logs (NOT `gh run view --log`)
+- **Dual API Support**: Automatically uses `gh` CLI when available, falls back to direct REST API
+- **API Selection**: Control via `--api` flag or `XARRAY_UPSTREAM_API` environment variable
+  - `auto` (default): Try gh CLI first, fallback to REST API
+  - `gh`: Force gh CLI usage (fails if not available/authenticated)
+  - `rest`: Force direct REST API usage (rate limited: 60 requests/hour)
+- **Key Commands**:
+  - gh CLI: `gh api repos/pydata/xarray/actions/jobs/{job_id}/logs`
+  - REST API: `GET https://api.github.com/repos/pydata/xarray/actions/jobs/{job_id}/logs`
 - Searches for **priority events** first: `["schedule", "workflow_dispatch"]` (most likely to have tests) then fallback to all runs
 - Sorts priority runs by creation time (most recent first)
 - Filters jobs with `job.get("name", "").lower().startswith("upstream-dev")` AND excludes "detect" and "mypy"
 - Only considers jobs with conclusion in `["success", "failure"]` (not "skipped")
+
+### API Client Architecture
+- `GitHubAPIClient` class abstracts gh CLI vs REST API differences
+- Constructor parameter `force_api` overrides environment detection
+- Rate limiting handled gracefully with clear error messages
+- Automatic fallback when gh CLI unavailable but requested
 
 ### Test Failure Analysis
 - Strips ANSI codes with `re.sub(r'\x1b\[[0-9;]*m|\[[0-9;]*m', '', result.stdout)`
@@ -25,9 +37,10 @@ This is a Python CLI tool (`xarray-upstream-checker`) that monitors xarray's ups
 ### Module Structure
 ```
 src/xarray_upstream_checker/
-├── __init__.py         # Package exports: main, ZarrUpstreamChecker, GitHubAPIError
-├── main.py            # CLI entry point with argparse (fixes --help issue)
+├── __init__.py         # Package exports: main, ZarrUpstreamChecker, GitHubAPIError, GitHubAPIClient
+├── main.py            # CLI entry point with argparse (fixes --help issue, --api flag)
 ├── checker.py         # Core logic: ZarrUpstreamChecker class
+├── github_api.py      # GitHubAPIClient with gh CLI / REST API fallback
 ├── display.py         # Rich formatting: display_results, display_test_failures, etc.
 └── exceptions.py      # GitHubAPIError exception
 ```
@@ -47,8 +60,15 @@ uv tool install -e .
 # Test CLI without running
 xarray-upstream-checker --help
 
-# Run the tool
-xarray-upstream-checker
+# Run the tool (different API choices)
+xarray-upstream-checker                    # Auto-detect API
+xarray-upstream-checker --api gh           # Force gh CLI
+xarray-upstream-checker --api rest         # Force REST API
+XARRAY_UPSTREAM_API=rest xarray-upstream-checker  # Via environment variable
+
+# Development testing
+uv run python -m xarray_upstream_checker --api rest  # Test REST API path
+uv run python -m xarray_upstream_checker --api gh    # Test gh CLI path
 
 # Linting (ALWAYS run before commits)
 uv run ruff check .
@@ -82,6 +102,11 @@ git add pyproject.toml
 ### Wrong Workflow Runs
 - **Problem**: Finding runs where tests were skipped
 - **Solution**: Check `conclusion in ["success", "failure"]` AND search scheduled runs first
+
+### API Choice and Rate Limiting
+- **Problem**: GitHub REST API has 60 requests/hour limit for unauthenticated access
+- **Solution**: Use `--api gh` or ensure gh CLI is authenticated for higher limits
+- **Fallback**: Tool gracefully handles rate limits and provides clear error messages
 
 ## Code Patterns
 
@@ -128,6 +153,8 @@ upstream_job = next(
 ## Testing
 - Test CLI help: `xarray-upstream-checker --help` (should NOT run script)
 - Test execution: `xarray-upstream-checker` (should analyze CI and display results)
+- Test API paths: `uv run python -m xarray_upstream_checker --api rest` and `--api gh`
+- Test environment variable: `XARRAY_UPSTREAM_API=rest uv run python -m xarray_upstream_checker`
 - Test editable install: `uv tool uninstall xarray-upstream-checker && uv tool install -e .`
 
 ## Maintaining This Documentation

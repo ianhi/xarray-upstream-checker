@@ -1,49 +1,22 @@
 """Core ZarrUpstreamChecker class for analyzing xarray CI."""
 
-import json
 import re
-import subprocess
 from typing import Optional
 
 from rich.console import Console
 
 from .exceptions import GitHubAPIError
+from .github_api import GitHubAPIClient
 
 console = Console()
 
 
 class ZarrUpstreamChecker:
-    def __init__(self):
+    def __init__(self, api_choice: Optional[str] = None):
         self.xarray_repo = "pydata/xarray"
         self.zarr_repo = "zarr-developers/zarr-python"
         self.workflow_name = "upstream-dev-ci.yaml"
-
-    def run_gh_command(self, args: list[str]) -> dict:
-        """Run a gh CLI command and return JSON response"""
-        try:
-            result = subprocess.run(
-                ["gh", *args], capture_output=True, text=True, check=True
-            )
-            return json.loads(result.stdout)
-        except subprocess.CalledProcessError as e:
-            if (
-                "not found" in e.stderr.lower()
-                or "command not found" in e.stderr.lower()
-            ):
-                raise GitHubAPIError(
-                    "gh CLI not found. Please install GitHub CLI: https://cli.github.com/"
-                ) from None
-            elif (
-                "authentication" in e.stderr.lower()
-                or "not logged in" in e.stderr.lower()
-            ):
-                raise GitHubAPIError(
-                    "gh CLI not authenticated. Please run: gh auth login"
-                ) from None
-            else:
-                raise GitHubAPIError(f"gh CLI error: {e.stderr}") from e
-        except json.JSONDecodeError:
-            raise GitHubAPIError("Invalid JSON response from gh CLI") from None
+        self.github_api = GitHubAPIClient(force_api=api_choice)
 
     def get_latest_workflow_run_with_tests(self) -> dict:
         """Get the most recent workflow run where upstream-dev tests actually executed"""
@@ -53,21 +26,11 @@ class ZarrUpstreamChecker:
             priority_runs = []
 
             for event in priority_events:
-                runs = self.run_gh_command(
-                    [
-                        "run",
-                        "list",
-                        "--repo",
-                        self.xarray_repo,
-                        "--workflow",
-                        self.workflow_name,
-                        "--event",
-                        event,
-                        "--limit",
-                        "5",  # Check recent runs of each type
-                        "--json",
-                        "databaseId,number,headBranch,headSha,status,conclusion,createdAt,updatedAt,event",
-                    ]
+                runs = self.github_api.get_workflow_runs(
+                    repo=self.xarray_repo,
+                    workflow=self.workflow_name,
+                    event=event,
+                    limit=5,
                 )
                 priority_runs.extend(runs)
 
@@ -117,21 +80,11 @@ class ZarrUpstreamChecker:
             console.print(
                 "[yellow]No priority runs with tests found, searching all recent runs...[/yellow]"
             )
-            all_runs = self.run_gh_command(
-                [
-                    "run",
-                    "list",
-                    "--repo",
-                    self.xarray_repo,
-                    "--workflow",
-                    self.workflow_name,
-                    "--branch",
-                    "main",
-                    "--limit",
-                    "20",
-                    "--json",
-                    "databaseId,number,headBranch,headSha,status,conclusion,createdAt,updatedAt,event",
-                ]
+            all_runs = self.github_api.get_workflow_runs(
+                repo=self.xarray_repo,
+                workflow=self.workflow_name,
+                branch="main",
+                limit=20,
             )
 
             if not all_runs:
@@ -175,23 +128,29 @@ class ZarrUpstreamChecker:
     def get_workflow_jobs(self, run_id: int) -> list[dict]:
         """Get jobs for a specific workflow run"""
         try:
-            jobs = self.run_gh_command(
-                [
-                    "run",
-                    "view",
-                    str(run_id),
-                    "--repo",
-                    self.xarray_repo,
-                    "--json",
-                    "jobs",
-                ]
-            )
-            return jobs.get("jobs", [])
+            return self.github_api.get_workflow_jobs(self.xarray_repo, run_id)
         except Exception as e:
             console.print(
                 f"[yellow]Warning: Could not get jobs for run {run_id}: {e}[/yellow]"
             )
             return []
+
+    def _find_upstream_dev_job(self, run_id: int) -> Optional[dict]:
+        """Find the upstream-dev job for a given workflow run."""
+        try:
+            jobs = self.github_api.get_workflow_jobs(self.xarray_repo, run_id)
+            return next(
+                (
+                    job
+                    for job in jobs
+                    if job.get("name", "").lower().startswith("upstream-dev")
+                    and "detect" not in job.get("name", "").lower()
+                    and "mypy" not in job.get("name", "").lower()
+                ),
+                None,
+            )
+        except Exception:
+            return None
 
     def get_workflow_logs_summary(self, run_id: int) -> Optional[str]:
         """Extract zarr version from workflow logs"""
@@ -203,53 +162,19 @@ class ZarrUpstreamChecker:
         ]
 
         try:
-            # First, get the upstream-dev job ID
-            jobs_result = subprocess.run(
-                [
-                    "gh",
-                    "run",
-                    "view",
-                    str(run_id),
-                    "--repo",
-                    self.xarray_repo,
-                    "--json",
-                    "jobs",
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-
-            jobs_data = json.loads(jobs_result.stdout)
-            upstream_job = next(
-                (
-                    job
-                    for job in jobs_data.get("jobs", [])
-                    if job.get("name", "").lower().startswith("upstream-dev")
-                    and "detect" not in job.get("name", "").lower()
-                    and "mypy" not in job.get("name", "").lower()
-                ),
-                None,
-            )
-
+            upstream_job = self._find_upstream_dev_job(run_id)
             if not upstream_job:
                 return None
 
-            job_id = upstream_job["databaseId"]
+            job_id = upstream_job.get("databaseId") or upstream_job.get("id")
             console.print(
                 f"[dim]Getting logs for upstream-dev job {job_id} to find zarr version[/dim]"
             )
 
-            # Second, get the logs for that specific job using API
-            result = subprocess.run(
-                ["gh", "api", f"repos/{self.xarray_repo}/actions/jobs/{job_id}/logs"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
+            log_content = self.github_api.get_job_logs(self.xarray_repo, job_id)
 
             for pattern in version_patterns:
-                matches = re.findall(pattern, result.stdout, re.IGNORECASE)
+                matches = re.findall(pattern, log_content, re.IGNORECASE)
                 if matches:
                     console.print(f"[dim]Found zarr version matches: {matches}[/dim]")
                     return matches[0]
@@ -285,58 +210,24 @@ class ZarrUpstreamChecker:
         ]
 
         try:
-            # First, get the upstream-dev job ID
-            jobs_result = subprocess.run(
-                [
-                    "gh",
-                    "run",
-                    "view",
-                    str(run_id),
-                    "--repo",
-                    self.xarray_repo,
-                    "--json",
-                    "jobs",
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-
-            jobs_data = json.loads(jobs_result.stdout)
-            upstream_job = next(
-                (
-                    job
-                    for job in jobs_data.get("jobs", [])
-                    if job.get("name", "").lower().startswith("upstream-dev")
-                    and "detect" not in job.get("name", "").lower()
-                    and "mypy" not in job.get("name", "").lower()
-                ),
-                None,
-            )
-
+            upstream_job = self._find_upstream_dev_job(run_id)
             if not upstream_job:
                 console.print(
                     f"[yellow]Could not find upstream-dev job in run {run_id}[/yellow]"
                 )
                 return {"zarr_related": [], "other_failures": [], "total_failures": 0}
 
-            job_id = upstream_job["databaseId"]
+            job_id = upstream_job.get("databaseId") or upstream_job.get("id")
             console.print(f"[dim]Getting logs for upstream-dev job {job_id}[/dim]")
 
-            # Second, get the logs for that specific job using API
-            result = subprocess.run(
-                ["gh", "api", f"repos/{self.xarray_repo}/actions/jobs/{job_id}/logs"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
+            log_content = self.github_api.get_job_logs(self.xarray_repo, job_id)
 
             console.print(
-                f"[dim]Analyzing {len(result.stdout)} characters of log data for test failures...[/dim]"
+                f"[dim]Analyzing {len(log_content)} characters of log data for test failures...[/dim]"
             )
 
             # Strip ANSI color codes from logs for better parsing
-            clean_logs = re.sub(r"\x1b\[[0-9;]*m|\[[0-9;]*m", "", result.stdout)
+            clean_logs = re.sub(r"\x1b\[[0-9;]*m|\[[0-9;]*m", "", log_content)
 
             # Extract test names from FAILED lines
             test_names = []
@@ -397,10 +288,6 @@ class ZarrUpstreamChecker:
                 "total_failures": len(test_names),
             }
 
-        except subprocess.CalledProcessError as e:
-            console.print(
-                f"[yellow]Warning: Could not access workflow logs (exit code {e.returncode})[/yellow]"
-            )
         except Exception as e:
             console.print(
                 f"[yellow]Warning: Could not extract test failures: {e}[/yellow]"
@@ -410,22 +297,7 @@ class ZarrUpstreamChecker:
 
     def get_zarr_latest_commit(self) -> Optional[dict]:
         """Get the latest commit from zarr-python main branch"""
-        try:
-            result = subprocess.run(
-                [
-                    "gh",
-                    "api",
-                    f"repos/{self.zarr_repo}/commits",
-                    "--jq",
-                    ".[0] | {sha: .sha, date: .commit.author.date}",
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return json.loads(result.stdout)
-        except Exception:
-            return None
+        return self.github_api.get_latest_commit(self.zarr_repo)
 
     def check_upstream_compatibility(self) -> dict:
         """Main method to check xarray upstream compatibility with zarr"""

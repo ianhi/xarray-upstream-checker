@@ -48,9 +48,16 @@ Requirements:
         "--version", action="version", version="xarray-upstream-checker 0.1.0"
     )
 
-    parser.parse_args()
+    parser.add_argument(
+        "--api",
+        choices=["auto", "gh", "rest"],
+        default="auto",
+        help="Choose GitHub API method: 'auto' (default), 'gh' (GitHub CLI), or 'rest' (direct REST API)",
+    )
 
-    checker = ZarrUpstreamChecker()
+    args = parser.parse_args()
+
+    checker = ZarrUpstreamChecker(api_choice=args.api)
 
     try:
         results = checker.check_upstream_compatibility()

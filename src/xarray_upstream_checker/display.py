@@ -164,7 +164,7 @@ def display_freshness_check(run: dict, zarr_commit: Optional[dict]) -> None:
             )
         else:
             freshness_text = Text(
-                f"❌ Workflow appears outdated ({hours_diff/24:.1f} days behind zarr)",
+                f"❌ Workflow appears outdated ({hours_diff / 24:.1f} days behind zarr)",
                 style="bold red",
             )
 
