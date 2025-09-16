@@ -128,3 +128,33 @@ upstream_job = next(
 - Test CLI help: `xarray-upstream-checker --help` (should NOT run script)
 - Test execution: `xarray-upstream-checker` (should analyze CI and display results)
 - Test editable install: `uv tool uninstall xarray-upstream-checker && uv tool install -e .`
+
+## Maintaining This Documentation
+
+**CRITICAL**: When making changes to this project, ALWAYS update this CLAUDE.md file to reflect:
+
+### Must Update When Changed:
+- **API patterns**: New GitHub CLI commands or workflow analysis logic
+- **Error handling**: New error types, API failure modes, or solutions to issues
+- **Code patterns**: New regex patterns, parsing logic, or data structures
+- **Build system**: Changes to pyproject.toml, dependencies, or packaging
+- **Module structure**: New files, renamed modules, or refactored functionality
+- **Development workflow**: New commands, testing procedures, or git practices
+
+### How to Update:
+1. **Before committing changes**: Review if CLAUDE.md needs updates
+2. **Add new issues/solutions**: Document any bugs encountered and their fixes
+3. **Update code patterns**: Include new regex patterns, API calls, or algorithms
+4. **Keep examples current**: Ensure all code snippets and commands work
+5. **Commit documentation changes**: Separate commits for code vs documentation
+
+### Why This Matters:
+This CLAUDE.md serves as institutional memory for the project. Without proper updates, future AI agents (or developers) will struggle with the same issues that were already solved, leading to repeated debugging and wasted time.
+
+**Template for documentation updates**:
+```markdown
+### New Issue: [Brief Description]
+- **Problem**: [What went wrong]
+- **Solution**: [How it was fixed]
+- **Code**: [Relevant code snippets or commands]
+```
