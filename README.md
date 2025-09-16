@@ -81,7 +81,7 @@ Found 10 scheduled runs to check
 
 ## What it does
 
-1. **Searches for scheduled runs** - Uses `--event schedule` to find upstream test runs (not PR-triggered runs)
+1. **Searches for priority runs** - Uses `--event schedule` and `--event workflow_dispatch` to find upstream test runs (not PR-triggered runs)
 2. **Verifies test execution** - Distinguishes between "workflow ran but skipped tests" vs "tests actually executed"
 3. **Extracts zarr version** - Parses workflow logs to find the exact zarr version tested
 4. **Categorizes failures** - Analyzes test names to identify zarr-related vs other upstream dependency issues
@@ -91,19 +91,61 @@ Found 10 scheduled runs to check
 
 The tool uses the GitHub CLI (`gh`) to:
 - Query the xarray repository's workflow runs
-- Filter for scheduled runs on the main branch
+- Filter for priority events (scheduled and workflow_dispatch) on the main branch
 - Find the most recent run where upstream-dev tests actually executed (not skipped)
 - Parse job logs to extract zarr version and test failure details
 - Categorize failures based on test names and keywords
 
 ## Development
 
+### Local Development
+
 To contribute or modify:
 
 ```bash
 git clone https://github.com/ianhi/xarray-upstream-checker.git
 cd xarray-upstream-checker
-uv run xarray_upstream_checker.py
+
+# Install in editable mode for development
+uv tool install -e .
+
+# Run the tool
+xarray-upstream-checker
+
+# Or run directly with uv for testing
+uv run python -m xarray_upstream_checker.main
+```
+
+### Testing and Linting
+
+```bash
+# Run linting and formatting
+uv run ruff check .
+uv run ruff format .
+
+# Install pre-commit hooks
+uv run pre-commit install
+
+# Test CLI without running
+xarray-upstream-checker --help
+
+# Test installation
+uv tool uninstall xarray-upstream-checker
+uv tool install -e .
+xarray-upstream-checker
+```
+
+### Development Commands
+
+```bash
+# Quick test run during development
+uv run python -m xarray_upstream_checker
+
+# Check package structure
+uv run python -c "from xarray_upstream_checker import main; print('Import works')"
+
+# Reinstall after changes
+uv tool install -e . --force-reinstall
 ```
 
 ## License
