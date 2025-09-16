@@ -168,16 +168,26 @@ upstream_job = next(
 - **Build system**: Changes to pyproject.toml, dependencies, or packaging
 - **Module structure**: New files, renamed modules, or refactored functionality
 - **Development workflow**: New commands, testing procedures, or git practices
+- **User-facing features**: New CLI flags, environment variables, or API options
+- **README documentation**: Major feature additions, usage examples, or requirements changes
 
 ### How to Update:
 1. **Before committing changes**: Review if CLAUDE.md needs updates
 2. **Add new issues/solutions**: Document any bugs encountered and their fixes
 3. **Update code patterns**: Include new regex patterns, API calls, or algorithms
 4. **Keep examples current**: Ensure all code snippets and commands work
-5. **Commit documentation changes**: Separate commits for code vs documentation
+5. **Update README when appropriate**: When adding user-facing features, always check if README.md needs corresponding updates for usage examples, requirements, or feature documentation
+6. **Commit documentation changes**: Separate commits for code vs documentation
 
 ### Why This Matters:
 This CLAUDE.md serves as institutional memory for the project. Without proper updates, future AI agents (or developers) will struggle with the same issues that were already solved, leading to repeated debugging and wasted time.
+
+**README Update Reminder**: Particularly important to keep README.md synchronized when:
+- Adding new CLI flags or options (like `--api` flag)
+- Adding environment variables (like `XARRAY_UPSTREAM_API`)
+- Changing requirements or dependencies (like making gh CLI optional)
+- Adding new usage patterns or examples
+- Modifying installation procedures or development workflows
 
 **Template for documentation updates**:
 ```markdown
