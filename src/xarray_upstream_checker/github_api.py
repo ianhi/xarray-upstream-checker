@@ -23,7 +23,10 @@ class GitHubAPIClient:
         self.base_url = "https://api.github.com"
 
         # Check environment variable or use parameter
-        api_preference = force_api or os.getenv("XARRAY_UPSTREAM_API", "auto")
+        if force_api and force_api != "auto":
+            api_preference = force_api
+        else:
+            api_preference = os.getenv("XARRAY_UPSTREAM_API", force_api or "auto")
 
         if api_preference == "rest":
             self.use_gh_cli = False
