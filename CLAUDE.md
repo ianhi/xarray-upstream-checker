@@ -11,7 +11,8 @@ This is a Python CLI tool (`xarray-upstream-checker`) that monitors xarray's ups
 ### GitHub API Integration
 - Uses `gh` CLI exclusively (not GitHub API directly)
 - **Key Command**: `gh api repos/pydata/xarray/actions/jobs/{job_id}/logs` to get logs (NOT `gh run view --log`)
-- Searches for **scheduled** runs first (most likely to have tests) then fallback to all runs
+- Searches for **priority events** first: `["schedule", "workflow_dispatch"]` (most likely to have tests) then fallback to all runs
+- Sorts priority runs by creation time (most recent first)
 - Filters jobs with `job.get("name", "").lower().startswith("upstream-dev")` AND excludes "detect" and "mypy"
 - Only considers jobs with conclusion in `["success", "failure"]` (not "skipped")
 

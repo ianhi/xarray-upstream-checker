@@ -46,33 +46,41 @@ class ZarrUpstreamChecker:
             raise GitHubAPIError("Invalid JSON response from gh CLI") from None
 
     def get_latest_workflow_run_with_tests(self) -> dict:
-        """Get the most recent scheduled workflow run where upstream-dev tests actually executed"""
+        """Get the most recent workflow run where upstream-dev tests actually executed"""
         try:
-            # First, try to get scheduled runs only (these are most likely to have actual tests)
-            scheduled_runs = self.run_gh_command(
-                [
-                    "run",
-                    "list",
-                    "--repo",
-                    self.xarray_repo,
-                    "--workflow",
-                    self.workflow_name,
-                    "--event",
-                    "schedule",
-                    "--limit",
-                    "10",  # Scheduled runs are more likely to have tests
-                    "--json",
-                    "databaseId,number,headBranch,headSha,status,conclusion,createdAt,updatedAt,event",
-                ]
-            )
+            # First, try to get scheduled and workflow_dispatch runs (most likely to have actual tests)
+            priority_events = ["schedule", "workflow_dispatch"]
+            priority_runs = []
 
-            if scheduled_runs:
-                console.print(
-                    f"[green]Found {len(scheduled_runs)} scheduled runs to check[/green]"
+            for event in priority_events:
+                runs = self.run_gh_command(
+                    [
+                        "run",
+                        "list",
+                        "--repo",
+                        self.xarray_repo,
+                        "--workflow",
+                        self.workflow_name,
+                        "--event",
+                        event,
+                        "--limit",
+                        "5",  # Check recent runs of each type
+                        "--json",
+                        "databaseId,number,headBranch,headSha,status,conclusion,createdAt,updatedAt,event",
+                    ]
                 )
-                for i, run in enumerate(scheduled_runs):
+                priority_runs.extend(runs)
+
+            # Sort by creation time (most recent first)
+            priority_runs.sort(key=lambda x: x["createdAt"], reverse=True)
+
+            if priority_runs:
+                console.print(
+                    f"[green]Found {len(priority_runs)} priority runs (schedule/workflow_dispatch) to check[/green]"
+                )
+                for i, run in enumerate(priority_runs):
                     console.print(
-                        f"[dim]Checking scheduled run {i + 1}/{len(scheduled_runs)}: {run['databaseId']}[/dim]"
+                        f"[dim]Checking {run.get('event', 'unknown')} run {i + 1}/{len(priority_runs)}: {run['databaseId']}[/dim]"
                     )
 
                     # Get jobs for this run
@@ -96,18 +104,18 @@ class ZarrUpstreamChecker:
                             f"[dim]  → upstream-dev job found with conclusion: {conclusion}[/dim]"
                         )
 
-                        # Scheduled runs should have actual test execution
+                        # Priority runs should have actual test execution
                         if conclusion in ["success", "failure"]:
                             console.print(
-                                f"[green]Found scheduled run with tests: {run['databaseId']}[/green]"
+                                f"[green]Found {run.get('event', 'unknown')} run with tests: {run['databaseId']}[/green]"
                             )
                             return run
                     else:
                         console.print("[dim]  → No upstream-dev job found[/dim]")
 
-            # Fallback: if no scheduled runs with tests found, search all runs
+            # Fallback: if no priority runs with tests found, search all runs
             console.print(
-                "[yellow]No scheduled runs with tests found, searching all recent runs...[/yellow]"
+                "[yellow]No priority runs with tests found, searching all recent runs...[/yellow]"
             )
             all_runs = self.run_gh_command(
                 [
