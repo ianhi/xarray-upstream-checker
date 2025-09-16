@@ -28,10 +28,12 @@ xarray-upstream-checker
 
 ### Requirements
 
-- [GitHub CLI (`gh`)](https://cli.github.com/) must be installed and authenticated
 - Python 3.9+
+- **Optional**: [GitHub CLI (`gh`)](https://cli.github.com/) for higher API rate limits
 
-To set up GitHub CLI:
+The tool automatically falls back to direct GitHub REST API if `gh` CLI is not available, but this has stricter rate limits (60 requests/hour for unauthenticated requests).
+
+To set up GitHub CLI for better performance:
 
 ```bash
 # Install gh CLI (if not already installed)
@@ -45,11 +47,36 @@ gh auth login
 
 ## Usage
 
+### Basic Usage
+
 Simply run the tool:
 
 ```bash
 xarray-upstream-checker
 ```
+
+### API Selection
+
+Control which GitHub API to use:
+
+```bash
+# Let the tool automatically choose (default: prefers gh CLI if available)
+xarray-upstream-checker --api auto
+
+# Force using GitHub CLI (requires authentication)
+xarray-upstream-checker --api gh
+
+# Force using direct REST API (rate limited but no auth required)
+xarray-upstream-checker --api rest
+
+# Use environment variable to set default
+export XARRAY_UPSTREAM_API=rest
+xarray-upstream-checker
+```
+
+The tool will automatically detect and use the best available option:
+- ✅ **gh CLI** (preferred): Higher rate limits, requires `gh auth login`
+- 🔄 **REST API** (fallback): Works without authentication, 60 requests/hour limit
 
 ### Example Output
 
@@ -89,12 +116,18 @@ Found 10 scheduled runs to check
 
 ## How it works
 
-The tool uses the GitHub CLI (`gh`) to:
+The tool uses either GitHub CLI (`gh`) or direct REST API to:
 - Query the xarray repository's workflow runs
 - Filter for priority events (scheduled and workflow_dispatch) on the main branch
 - Find the most recent run where upstream-dev tests actually executed (not skipped)
 - Parse job logs to extract zarr version and test failure details
 - Categorize failures based on test names and keywords
+
+**API Selection Logic:**
+1. If `--api gh` specified: Use GitHub CLI (fails if not authenticated)
+2. If `--api rest` specified: Use direct REST API
+3. If `--api auto` (default): Try GitHub CLI first, fallback to REST API if unavailable
+4. Environment variable `XARRAY_UPSTREAM_API` can set the default preference
 
 ## Development
 
@@ -129,6 +162,10 @@ uv run pre-commit install
 # Test CLI without running
 xarray-upstream-checker --help
 
+# Test different API modes
+xarray-upstream-checker --api rest  # Test REST API fallback
+xarray-upstream-checker --api gh    # Test GitHub CLI (requires auth)
+
 # Test installation
 uv tool uninstall xarray-upstream-checker
 uv tool install -e .
@@ -140,6 +177,10 @@ xarray-upstream-checker
 ```bash
 # Quick test run during development
 uv run python -m xarray_upstream_checker
+
+# Test different API modes in development
+uv run python -m xarray_upstream_checker --api rest
+XARRAY_UPSTREAM_API=rest uv run python -m xarray_upstream_checker
 
 # Check package structure
 uv run python -c "from xarray_upstream_checker import main; print('Import works')"
