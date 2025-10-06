@@ -177,9 +177,9 @@ def display_freshness_check(run: dict, zarr_commit: Optional[dict]) -> None:
             )
 
         freshness_text.append(
-            f"\nLatest zarr commit: {zarr_commit['sha'][:8]} ({zarr_commit['date']})"
+            f"\nLatest zarr commit: {zarr_commit['date']} {zarr_commit['sha'][:8]}"
         )
-        freshness_text.append(f"\nWorkflow started: {run['createdAt']}")
+        freshness_text.append(f"\nWorkflow started:   {run['createdAt']}")
 
     except Exception:
         freshness_text = Text(
