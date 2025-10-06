@@ -151,20 +151,28 @@ def display_freshness_check(run: dict, zarr_commit: Optional[dict]) -> None:
 
         # Check if workflow is testing recent zarr changes
         time_diff = workflow_time - zarr_commit_time
-        hours_diff = abs(time_diff.total_seconds()) / 3600
+        hours_diff = time_diff.total_seconds() / 3600
 
-        if hours_diff <= 24 and workflow_time >= zarr_commit_time:
+        # Workflow is newer than the zarr commit (good!)
+        if hours_diff >= 0 and hours_diff <= 24:
             freshness_text = Text(
                 "✅ Workflow is current with latest zarr commits", style="bold green"
             )
-        elif hours_diff <= 72:
+        elif hours_diff >= 0:
+            # Workflow ran AFTER the zarr commit, so it's testing current or newer code
             freshness_text = Text(
-                f"⚠️ Workflow may be slightly outdated ({hours_diff:.1f} hours behind zarr)",
+                f"✅ Workflow is current ({hours_diff:.1f} hours after latest zarr commit)",
+                style="bold green",
+            )
+        # Workflow is older than the zarr commit (zarr has new commits not tested yet)
+        elif hours_diff >= -72:
+            freshness_text = Text(
+                f"⚠️ Workflow may be slightly outdated ({abs(hours_diff):.1f} hours behind zarr)",
                 style="bold yellow",
             )
         else:
             freshness_text = Text(
-                f"❌ Workflow appears outdated ({hours_diff / 24:.1f} days behind zarr)",
+                f"❌ Workflow appears outdated ({abs(hours_diff) / 24:.1f} days behind zarr)",
                 style="bold red",
             )
 
